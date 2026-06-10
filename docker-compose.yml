@@ -38,6 +38,7 @@ services:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MEDASSIST_EAGER_INIT=1
       # ANTHROPIC_API_KEY et LLM_MODEL sont fournis via le fichier .env
     depends_on:
       qdrant:

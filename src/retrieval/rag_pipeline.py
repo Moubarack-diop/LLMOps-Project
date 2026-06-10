@@ -44,7 +44,12 @@ class MedicalRAGPipeline:
         self.chain = self.prompt | self.llm
         logger.info("Pipeline RAG initialisé avec succès (modèle : %s).", llm_model)
 
-    def query(self, question: str, note_id: str | None = None) -> dict[str, Any]:
+    def query(
+        self,
+        question: str,
+        note_id: str | None = None,
+        top_k: int | None = None,
+    ) -> dict[str, Any]:
         if not question or not question.strip():
             raise ValueError("La question ne peut pas être vide.")
         logger.info("Traitement de la requête : '%s'", question[:100])
@@ -56,7 +61,7 @@ class MedicalRAGPipeline:
         try:
             retrieved_docs = self.vector_store.search(
                 query_embedding=query_embedding,
-                top_k=self.top_k,
+                top_k=top_k if top_k is not None else self.top_k,
                 note_id=note_id,
             )
         except Exception as exc:

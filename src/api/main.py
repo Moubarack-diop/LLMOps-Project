@@ -57,6 +57,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning(
             "Anthropic : ANTHROPIC_API_KEY absente. Les requêtes RAG échoueront. Renseignez votre clé dans le fichier .env."
         )
+    # Pré-charge le modèle d'embedding et la connexion Qdrant pour que la
+    # première requête ne paie pas le coût d'initialisation (désactivable,
+    # notamment pour les tests).
+    if os.getenv("MEDASSIST_EAGER_INIT", "0") == "1":
+        from src.api.routes import warmup_resources
+
+        warmup_resources()
     logger.info("=== MedAssist API prête ===")
     yield
     logger.info("=== Arrêt de MedAssist API ===")

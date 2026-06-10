@@ -17,9 +17,14 @@ def test_client():
         },
     ):
         from src.api.main import app
+        from src.api.routes import reset_resources
 
+        # Vide le cache de singletons pour que chaque test instancie ses
+        # propres mocks (les ressources sont partagées entre les requêtes).
+        reset_resources()
         with TestClient(app, raise_server_exceptions=True) as client:
             yield client
+        reset_resources()
 
 
 class TestHealthEndpoint:

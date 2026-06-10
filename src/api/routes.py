@@ -1,7 +1,11 @@
 import logging
 import os
+import threading
+from typing import Any, Callable
+
 import httpx
 from fastapi import APIRouter, HTTPException
+
 from src.api.schemas import (
     HealthResponse,
     IngestRequest,
@@ -21,27 +25,84 @@ from src.retrieval.vector_store import QdrantStore
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Ressources partagées entre les requêtes : le modèle d'embedding met plusieurs
+# secondes à charger et le pipeline LLM n'a pas besoin d'être reconstruit à
+# chaque appel. Chaque ressource est créée au premier usage puis réutilisée.
+_resources: dict[str, Any] = {}
+_resources_lock = threading.RLock()
+
+
+def reset_resources() -> None:
+    """Vide le cache de ressources (utilisé par les tests)."""
+    with _resources_lock:
+        _resources.clear()
+
+
+def _get_resource(key: str, factory: Callable[[], Any]) -> Any:
+    with _resources_lock:
+        if key not in _resources:
+            _resources[key] = factory()
+        return _resources[key]
+
 
 def _get_qdrant_store() -> QdrantStore:
-    return QdrantStore(
-        host=os.getenv("QDRANT_HOST", "localhost"),
-        port=int(os.getenv("QDRANT_PORT", "6333")),
-        collection_name=os.getenv("QDRANT_COLLECTION", "medassist"),
+    return _get_resource(
+        "qdrant_store",
+        lambda: QdrantStore(
+            host=os.getenv("QDRANT_HOST", "localhost"),
+            port=int(os.getenv("QDRANT_PORT", "6333")),
+            collection_name=os.getenv("QDRANT_COLLECTION", "medassist"),
+        ),
     )
 
 
 def _get_embedder() -> MedicalEmbedder:
-    return MedicalEmbedder(
-        model_name=os.getenv(
-            "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
-        )
+    return _get_resource(
+        "embedder",
+        lambda: MedicalEmbedder(
+            model_name=os.getenv(
+                "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+            )
+        ),
     )
 
 
 def _get_mlflow_tracker() -> MLflowTracker:
-    return MLflowTracker(
-        tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    return _get_resource(
+        "mlflow_tracker",
+        lambda: MLflowTracker(
+            tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+        ),
     )
+
+
+def _get_rag_pipeline() -> MedicalRAGPipeline:
+    return _get_resource(
+        "rag_pipeline",
+        lambda: MedicalRAGPipeline(
+            vector_store=_get_qdrant_store(),
+            embedder=_get_embedder(),
+            llm_model=os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001"),
+            top_k=int(os.getenv("TOP_K", "5")),
+        ),
+    )
+
+
+def warmup_resources() -> None:
+    """Initialise les ressources lourdes au démarrage (best effort)."""
+    for name, getter in (
+        ("embedder", _get_embedder),
+        ("qdrant_store", _get_qdrant_store),
+    ):
+        try:
+            getter()
+            logger.info("Ressource '%s' initialisée au démarrage.", name)
+        except Exception as exc:
+            logger.warning(
+                "Ressource '%s' indisponible au démarrage (réessai au premier appel) : %s",
+                name,
+                exc,
+            )
 
 
 @router.get("/health", response_model=HealthResponse, tags=["Monitoring"])
@@ -122,15 +183,12 @@ async def ingest_dataset(request: IngestRequest) -> IngestResponse:
 async def query_rag(request: QueryRequest) -> QueryResponse:
     logger.info("Requête RAG reçue : '%s'", request.question[:80])
     try:
-        store = _get_qdrant_store()
-        embedder = _get_embedder()
-        pipeline = MedicalRAGPipeline(
-            vector_store=store,
-            embedder=embedder,
-            llm_model=os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001"),
+        pipeline = _get_rag_pipeline()
+        result = pipeline.query(
+            question=request.question,
+            note_id=request.note_id,
             top_k=request.top_k,
         )
-        result = pipeline.query(question=request.question, note_id=request.note_id)
         try:
             tracker = _get_mlflow_tracker()
             tracker.log_query(
