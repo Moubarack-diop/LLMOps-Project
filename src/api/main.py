@@ -50,6 +50,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.warning("MLflow : statut HTTP %d", resp.status_code)
     except Exception as exc:
         logger.warning("MLflow non disponible au démarrage : %s", exc)
+    # Tracing GenAI : chaque requête RAG produit une trace LangChain complète
+    # (prompt, contexte, réponse, latences) dans l'onglet Traces de MLflow.
+    if os.getenv("MEDASSIST_TRACING", "1") == "1":
+        try:
+            import mlflow
+
+            mlflow.set_tracking_uri(
+                os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+            )
+            mlflow.set_experiment("MedAssist-RAG")
+            mlflow.langchain.autolog()
+            logger.info("MLflow : tracing LangChain activé.")
+        except Exception as exc:
+            logger.warning("Tracing MLflow non activé (non bloquant) : %s", exc)
     llm_model = os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001")
     if os.getenv("ANTHROPIC_API_KEY"):
         logger.info("Anthropic : clé API détectée (modèle '%s')", llm_model)

@@ -51,6 +51,8 @@ jobs:
       QDRANT_PORT: "6333"
       QDRANT_COLLECTION: medassist_test
       MLFLOW_TRACKING_URI: http://localhost:5000
+      # Pas de serveur MLflow en CI : désactive le tracing au démarrage.
+      MEDASSIST_TRACING: "0"
       # Clé factice : les tests mockent tous les appels Anthropic réels.
       ANTHROPIC_API_KEY: test-key-ci
       EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2

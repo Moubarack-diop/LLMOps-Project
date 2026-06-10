@@ -14,6 +14,9 @@ def test_client():
             "QDRANT_PORT": "6333",
             "QDRANT_COLLECTION": "medassist_test",
             "MLFLOW_TRACKING_URI": "http://localhost:5000",
+            # Pas de serveur MLflow dans les tests : évite la tentative de
+            # connexion du tracing au démarrage de l'app.
+            "MEDASSIST_TRACING": "0",
         },
     ):
         from src.api.main import app
