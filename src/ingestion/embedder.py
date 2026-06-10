@@ -55,3 +55,63 @@ class MedicalEmbedder:
 
     def get_embedding_dimension(self) -> int:
         return self.embedding_dim
+
+
+def run_embedding_stage(
+    input_path: str = "data/raw/asclepius_documents.json",
+    output_dir: str = "data/processed",
+) -> str:
+    """Stage DVC : charge les documents bruts, les découpe et les vectorise.
+
+    Produit deux fichiers dans ``output_dir`` : les chunks avec leurs
+    métadonnées (JSON) et la matrice d'embeddings (NumPy ``.npy``).
+    """
+    import json
+    import os
+
+    import numpy as np
+
+    from src.ingestion.chunker import chunk_documents
+
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(
+            f"Fichier introuvable : {input_path}. Exécutez d'abord le stage "
+            "'ingest' (dvc repro ingest)."
+        )
+    with open(input_path, encoding="utf-8") as f:
+        documents = json.load(f)
+    chunks = chunk_documents(
+        documents=documents,
+        chunk_size=int(os.getenv("CHUNK_SIZE", "512")),
+        chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "50")),
+    )
+    embedder = MedicalEmbedder(
+        model_name=os.getenv(
+            "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+        )
+    )
+    embeddings = embedder.embed_documents(chunks)
+    os.makedirs(output_dir, exist_ok=True)
+    chunks_path = os.path.join(output_dir, "chunks.json")
+    embeddings_path = os.path.join(output_dir, "embeddings.npy")
+    with open(chunks_path, "w", encoding="utf-8") as f:
+        json.dump(
+            [
+                {"page_content": c.page_content, "metadata": c.metadata}
+                for c in chunks
+            ],
+            f,
+            ensure_ascii=False,
+        )
+    np.save(embeddings_path, np.asarray(embeddings, dtype="float32"))
+    logger.info(
+        "Stage embed terminé : %d chunks dans %s, embeddings dans %s.",
+        len(chunks),
+        chunks_path,
+        embeddings_path,
+    )
+    return output_dir
+
+
+if __name__ == "__main__":
+    run_embedding_stage()
