@@ -119,9 +119,7 @@ def main() -> None:
             sample["note_id"],
             sample["question"][:80],
         )
-        result = pipeline.query(
-            question=sample["question"], note_id=sample["note_id"]
-        )
+        result = pipeline.query(question=sample["question"], note_id=sample["note_id"])
         result["ground_truth"] = sample["ground_truth"]
         results.append(result)
 

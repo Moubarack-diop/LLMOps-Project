@@ -124,9 +124,7 @@ app.include_router(router, prefix="")
 # l'API. Les routes API déclarées ci-dessus restent prioritaires sur le mount.
 _frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _frontend_dist.is_dir():
-    app.mount(
-        "/", StaticFiles(directory=str(_frontend_dist), html=True), name="ui"
-    )
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="ui")
     logger.info("Interface web servie depuis %s", _frontend_dist)
 else:
     logger.info(

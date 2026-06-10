@@ -292,9 +292,7 @@ def get_note(note_id: str) -> NoteDetailResponse:
             status_code=500, detail=f"Erreur lecture de la note : {exc}"
         ) from exc
     if note is None:
-        raise HTTPException(
-            status_code=404, detail=f"Note '{note_id}' introuvable."
-        )
+        raise HTTPException(status_code=404, detail=f"Note '{note_id}' introuvable.")
     return NoteDetailResponse(**note)
 
 

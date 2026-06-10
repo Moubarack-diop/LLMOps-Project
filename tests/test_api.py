@@ -265,9 +265,7 @@ class TestNoteDetailEndpoint:
         assert data["n_chunks"] == 3
 
     @patch("src.api.routes.QdrantStore")
-    def test_note_detail_returns_404_when_missing(
-        self, mock_qdrant_class, test_client
-    ):
+    def test_note_detail_returns_404_when_missing(self, mock_qdrant_class, test_client):
         mock_store = MagicMock()
         mock_store.get_note.return_value = None
         mock_qdrant_class.return_value = mock_store
