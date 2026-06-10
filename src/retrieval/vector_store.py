@@ -58,7 +58,15 @@ class QdrantStore:
         logger.info("Insertion de %d documents dans Qdrant...", len(chunks))
         points = []
         for chunk, embedding in zip(chunks, embeddings):
-            point_id = str(uuid.uuid4())
+            # ID déterministe (note + index du chunk) : ré-ingérer les mêmes
+            # documents écrase les points existants au lieu de les dupliquer.
+            point_id = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{chunk.metadata.get('note_id', 'unknown')}"
+                    f":{chunk.metadata.get('chunk_index', 0)}",
+                )
+            )
             payload = {
                 "page_content": chunk.page_content,
                 "note_id": chunk.metadata.get("note_id", "unknown"),
