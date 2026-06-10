@@ -1,0 +1,16 @@
+stages:
+  ingest:
+    cmd: python -m src.ingestion.loader
+    deps:
+      - src/ingestion/loader.py
+    outs:
+      - data/raw/
+
+  embed:
+    cmd: python -m src.ingestion.embedder
+    deps:
+      - src/ingestion/embedder.py
+      - src/ingestion/chunker.py
+      - data/raw/
+    outs:
+      - data/processed/

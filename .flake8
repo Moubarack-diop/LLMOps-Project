@@ -1,0 +1,14 @@
+[flake8]
+max-line-length = 88
+exclude =
+    .git,
+    __pycache__,
+    notebooks/,
+    .venv,
+    venv,
+    *.egg-info,
+    dist,
+    build
+ignore = E203, W503
+per-file-ignores =
+    tests/*:S101

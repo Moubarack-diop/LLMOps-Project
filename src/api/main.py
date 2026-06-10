@@ -1,0 +1,81 @@
+import logging
+import os
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from src.api.routes import router
+
+load_dotenv()
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s — %(name)s — %(levelname)s — %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    logger.info("=== Démarrage de MedAssist API ===")
+    logger.info(
+        "Configuration : QDRANT=%s:%s | MLFLOW=%s | LLM=%s",
+        os.getenv("QDRANT_HOST", "localhost"),
+        os.getenv("QDRANT_PORT", "6333"),
+        os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000"),
+        os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001"),
+    )
+    try:
+        from src.retrieval.vector_store import QdrantStore
+
+        store = QdrantStore(
+            host=os.getenv("QDRANT_HOST", "localhost"),
+            port=int(os.getenv("QDRANT_PORT", "6333")),
+            collection_name=os.getenv("QDRANT_COLLECTION", "medassist"),
+        )
+        if store.is_healthy():
+            logger.info("Qdrant : connexion OK")
+        else:
+            logger.warning("Qdrant : connexion DEGRADÉE")
+    except Exception as exc:
+        logger.warning("Qdrant non disponible au démarrage : %s", exc)
+    try:
+        import httpx
+
+        mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{mlflow_uri}/health")
+            if resp.status_code == 200:
+                logger.info("MLflow : connexion OK")
+            else:
+                logger.warning("MLflow : statut HTTP %d", resp.status_code)
+    except Exception as exc:
+        logger.warning("MLflow non disponible au démarrage : %s", exc)
+    llm_model = os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001")
+    if os.getenv("ANTHROPIC_API_KEY"):
+        logger.info("Anthropic : clé API détectée (modèle '%s')", llm_model)
+    else:
+        logger.warning(
+            "Anthropic : ANTHROPIC_API_KEY absente. Les requêtes RAG échoueront. Renseignez votre clé dans le fichier .env."
+        )
+    logger.info("=== MedAssist API prête ===")
+    yield
+    logger.info("=== Arrêt de MedAssist API ===")
+
+
+app = FastAPI(
+    title="MedAssist — Assistant Médical Intelligent",
+    description="Système RAG (Retrieval-Augmented Generation) permettant à un clinicien d'interroger des dossiers patients en langage naturel.\n\n**Dataset** : Asclepius Synthetic Clinical Notes (HuggingFace)\n\n**LLM** : Claude via Anthropic (claude-haiku-4-5)\n\n**Embeddings** : sentence-transformers/all-MiniLM-L6-v2\n\n**Base vectorielle** : Qdrant\n\n*Projet académique MLOps — Auteur : Mouhamed Diop | Encadrant : Mously DIAW*",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(router, prefix="")
+logger.info("Application MedAssist configurée avec succès.")

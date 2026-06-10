@@ -1,0 +1,35 @@
+# Secrets / environnement
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Données versionnées par DVC
+data/raw/
+data/processed/
+
+# MLflow local
+mlruns/
+mlartifacts/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

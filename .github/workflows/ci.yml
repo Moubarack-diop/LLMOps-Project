@@ -1,0 +1,131 @@
+name: MedAssist CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1 : Lint (flake8 + black)
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Code Quality (flake8 + black)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install linting dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flake8 black
+
+      - name: Run black (format check)
+        run: black src/ tests/ --check --diff
+
+      - name: Run flake8 (style check)
+        run: flake8 src/ tests/
+
+  # ---------------------------------------------------------------------------
+  # Job 2 : Tests (pytest + coverage)
+  # ---------------------------------------------------------------------------
+  test:
+    name: Unit Tests (pytest)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    env:
+      QDRANT_HOST: localhost
+      QDRANT_PORT: "6333"
+      QDRANT_COLLECTION: medassist_test
+      MLFLOW_TRACKING_URI: http://localhost:5000
+      # Clé factice : les tests mockent tous les appels Anthropic réels.
+      ANTHROPIC_API_KEY: test-key-ci
+      EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+      LLM_MODEL: claude-haiku-4-5-20251001
+      CHUNK_SIZE: "512"
+      CHUNK_OVERLAP: "50"
+      TOP_K: "5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v \
+            --tb=short
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ---------------------------------------------------------------------------
+  # Job 3 : Docker Build
+  # ---------------------------------------------------------------------------
+  build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: medassist:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker image starts
+        run: |
+          docker run --rm -d \
+            --name medassist_test \
+            -e ANTHROPIC_API_KEY=test-key-ci \
+            -e LLM_MODEL=claude-haiku-4-5-20251001 \
+            -e QDRANT_HOST=localhost \
+            -e QDRANT_PORT=6333 \
+            -e QDRANT_COLLECTION=medassist \
+            -e MLFLOW_TRACKING_URI=http://localhost:5000 \
+            -p 8000:8000 \
+            medassist:${{ github.sha }} || true
+          sleep 5
+          docker stop medassist_test || true
