@@ -69,6 +69,21 @@ def main() -> None:
         level=logging.INFO,
         format="%(asctime)s — %(name)s — %(levelname)s — %(message)s",
     )
+    # Trace tous les appels LangChain — y compris ceux du juge RAGAS : ses
+    # verdicts justifiés (statement/verdict/reason) deviennent lisibles dans
+    # l'onglet Traces de MLflow.
+    if os.getenv("MEDASSIST_TRACING", "1") == "1":
+        try:
+            import mlflow
+
+            mlflow.set_tracking_uri(
+                os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+            )
+            mlflow.set_experiment("MedAssist-RAG")
+            mlflow.langchain.autolog()
+            logger.info("Tracing MLflow activé pour l'évaluation.")
+        except Exception as exc:
+            logger.warning("Tracing MLflow non activé (non bloquant) : %s", exc)
     n_samples = int(sys.argv[1]) if len(sys.argv) > 1 else 5
     top_k = int(os.getenv("TOP_K", "5"))
     llm_model = os.getenv("LLM_MODEL", "claude-haiku-4-5-20251001")
