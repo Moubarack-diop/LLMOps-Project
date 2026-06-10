@@ -9,6 +9,28 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 logger = logging.getLogger(__name__)
 
 
+def _merge_overlapping_chunks(texts: list[str], max_overlap: int = 200) -> str:
+    """Concatène des chunks consécutifs en supprimant leur chevauchement.
+
+    Les chunks sont créés avec un chevauchement (chunk_overlap) : la fin d'un
+    chunk se retrouve au début du suivant. On cherche le plus long suffixe du
+    texte accumulé qui soit aussi un préfixe du chunk suivant.
+    """
+    merged = ""
+    for text in texts:
+        if not merged:
+            merged = text
+            continue
+        overlap = 0
+        window = min(max_overlap, len(merged), len(text))
+        for size in range(window, 0, -1):
+            if merged.endswith(text[:size]):
+                overlap = size
+                break
+        merged += text[overlap:] if overlap else "\n" + text
+    return merged
+
+
 class QdrantStore:
 
     def __init__(
@@ -165,6 +187,56 @@ class QdrantStore:
         except Exception as exc:
             logger.error("Erreur lors du listing des notes : %s", exc)
             raise RuntimeError(f"Listing des notes Qdrant échoué : {exc}") from exc
+
+    def get_note(self, note_id: str) -> dict[str, Any] | None:
+        """Reconstitue une note complète à partir de ses chunks."""
+        try:
+            chunks: list[dict[str, Any]] = []
+            offset = None
+            while True:
+                points, offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=256,
+                    offset=offset,
+                    scroll_filter=qdrant_models.Filter(
+                        must=[
+                            qdrant_models.FieldCondition(
+                                key="note_id",
+                                match=qdrant_models.MatchValue(value=note_id),
+                            )
+                        ]
+                    ),
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                for point in points:
+                    payload = point.payload or {}
+                    chunks.append(payload)
+                if offset is None:
+                    break
+            if not chunks:
+                return None
+            # Déduplique par chunk_index : les ingestions antérieures aux IDs
+            # déterministes ont pu laisser des doublons dans la collection.
+            by_index: dict[int, dict[str, Any]] = {}
+            for chunk in chunks:
+                by_index.setdefault(chunk.get("chunk_index", 0), chunk)
+            chunks = [by_index[i] for i in sorted(by_index)]
+            content = _merge_overlapping_chunks(
+                [c.get("page_content", "") for c in chunks]
+            )
+            first = chunks[0]
+            return {
+                "note_id": note_id,
+                "content": content,
+                "n_chunks": len(chunks),
+                "reference_question": first.get("question", ""),
+                "reference_answer": first.get("answer", ""),
+                "source": first.get("source", ""),
+            }
+        except Exception as exc:
+            logger.error("Erreur lors de la lecture de la note %s : %s", note_id, exc)
+            raise RuntimeError(f"Lecture de la note échouée : {exc}") from exc
 
     def get_collection_info(self) -> dict[str, Any]:
         try:

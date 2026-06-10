@@ -166,6 +166,28 @@ Services disponibles :
 
 ---
 
+## Interface web (React)
+
+L'interface principale est une application React (dossier `frontend/`) de type
+gestion de dossiers médicaux : annuaire des patients avec recherche, fiche
+dossier structurée, et interrogation du dossier par l'assistant IA avec
+citations des sources.
+
+```bash
+# Développement (rechargement à chaud, proxy API automatique vers :8000)
+cd frontend
+npm install
+npm run dev          # http://localhost:5173
+
+# Production : le build est servi par FastAPI sur http://localhost:8000/
+npm run build        # génère frontend/dist, détecté au démarrage de l'API
+```
+
+L'image Docker construit l'interface automatiquement (build multi-étapes) :
+avec `docker-compose up -d`, l'interface est disponible sur http://localhost:8000/.
+
+---
+
 ## Lancement en développement local
 
 ```bash

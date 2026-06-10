@@ -11,6 +11,7 @@ from src.api.schemas import (
     IngestRequest,
     IngestResponse,
     MetricsResponse,
+    NoteDetailResponse,
     NotesResponse,
     QueryRequest,
     QueryResponse,
@@ -273,6 +274,28 @@ def list_notes() -> NotesResponse:
         raise HTTPException(
             status_code=500, detail=f"Erreur listing des notes : {exc}"
         ) from exc
+
+
+@router.get(
+    "/notes/{note_id}",
+    response_model=NoteDetailResponse,
+    tags=["RAG"],
+    dependencies=[Depends(require_api_key)],
+)
+def get_note(note_id: str) -> NoteDetailResponse:
+    try:
+        store = _get_qdrant_store()
+        note = store.get_note(note_id)
+    except Exception as exc:
+        logger.error("Erreur lecture de la note %s : %s", note_id, exc)
+        raise HTTPException(
+            status_code=500, detail=f"Erreur lecture de la note : {exc}"
+        ) from exc
+    if note is None:
+        raise HTTPException(
+            status_code=404, detail=f"Note '{note_id}' introuvable."
+        )
+    return NoteDetailResponse(**note)
 
 
 @router.get(

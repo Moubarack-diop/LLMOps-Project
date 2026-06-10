@@ -36,3 +36,10 @@ Thumbs.db
 
 # Captures d'ecran locales
 *.png
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Harnais de verification local
+.verify/

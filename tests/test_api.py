@@ -243,6 +243,38 @@ class TestNotesEndpoint:
         assert data["notes"] == ["note_00000", "note_00391"]
 
 
+class TestNoteDetailEndpoint:
+
+    @patch("src.api.routes.QdrantStore")
+    def test_note_detail_returns_content(self, mock_qdrant_class, test_client):
+        mock_store = MagicMock()
+        mock_store.get_note.return_value = {
+            "note_id": "note_00042",
+            "content": "Patient admitted with chest pain.",
+            "n_chunks": 3,
+            "reference_question": "What was the diagnosis?",
+            "reference_answer": "STEMI.",
+            "source": "asclepius/note_00042",
+        }
+        mock_qdrant_class.return_value = mock_store
+        response = test_client.get("/notes/note_00042")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["note_id"] == "note_00042"
+        assert data["content"] == "Patient admitted with chest pain."
+        assert data["n_chunks"] == 3
+
+    @patch("src.api.routes.QdrantStore")
+    def test_note_detail_returns_404_when_missing(
+        self, mock_qdrant_class, test_client
+    ):
+        mock_store = MagicMock()
+        mock_store.get_note.return_value = None
+        mock_qdrant_class.return_value = mock_store
+        response = test_client.get("/notes/note_99999")
+        assert response.status_code == 404
+
+
 class TestApiKeyAuth:
 
     @patch("src.api.routes.QdrantStore")

@@ -1,4 +1,13 @@
+# --- Étape 1 : build de l'interface React -----------------------------------
+FROM node:22-alpine AS frontend-build
 
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# --- Étape 2 : API Python ----------------------------------------------------
 FROM python:3.11-slim
 
 LABEL maintainer="Mouhamed Diop"
@@ -24,8 +33,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# Copy application source
+# Copy application source and built frontend
 COPY src/ ./src/
+COPY --from=frontend-build /frontend/dist ./frontend/dist
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

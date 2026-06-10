@@ -79,6 +79,19 @@ class NotesResponse(BaseModel):
     )
 
 
+class NoteDetailResponse(BaseModel):
+    note_id: str = Field(..., description="Identifiant de la note clinique.")
+    content: str = Field(..., description="Texte complet reconstitué de la note.")
+    n_chunks: int = Field(default=0, description="Nombre de chunks indexés.")
+    reference_question: str = Field(
+        default="", description="Question de référence du dataset Asclepius."
+    )
+    reference_answer: str = Field(
+        default="", description="Réponse de référence du dataset Asclepius."
+    )
+    source: str = Field(default="", description="Source du document.")
+
+
 class MetricsResponse(BaseModel):
     run_id: str = Field(default="", description="Identifiant du run MLflow.")
     faithfulness: float = Field(

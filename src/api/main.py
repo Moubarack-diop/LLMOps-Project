@@ -1,10 +1,12 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from src.api.routes import router
 
 load_dotenv()
@@ -117,4 +119,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router, prefix="")
+
+# Sert l'interface React buildée (frontend/dist) sur la même origine que
+# l'API. Les routes API déclarées ci-dessus restent prioritaires sur le mount.
+_frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount(
+        "/", StaticFiles(directory=str(_frontend_dist), html=True), name="ui"
+    )
+    logger.info("Interface web servie depuis %s", _frontend_dist)
+else:
+    logger.info(
+        "frontend/dist absent : interface web non servie "
+        "(npm run build dans frontend/ pour la générer)."
+    )
 logger.info("Application MedAssist configurée avec succès.")
