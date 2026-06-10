@@ -4,19 +4,24 @@ import pandas as pd
 import streamlit as st
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+# Si l'API est protégée (MEDASSIST_API_KEY côté serveur), la même clé doit
+# être fournie au dashboard pour qu'il l'envoie dans l'en-tête X-API-Key.
+API_KEY = os.getenv("MEDASSIST_API_KEY", "")
 
 
 def call_api(method: str, endpoint: str, timeout: float = 120.0, **kwargs) -> dict:
     url = f"{API_BASE_URL}{endpoint}"
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=timeout, headers=headers) as client:
             func = getattr(client, method)
             response = func(url, **kwargs)
             response.raise_for_status()
             return response.json()
     except httpx.ConnectError:
         raise ConnectionError(
-            f"Impossible de se connecter à l'API MedAssist ({API_BASE_URL}). Vérifiez que le serveur est démarré."
+            f"Impossible de se connecter à l'API MedAssist ({API_BASE_URL})."
+            " Vérifiez que le serveur est démarré."
         )
     except httpx.HTTPStatusError as exc:
         raise RuntimeError(
@@ -83,7 +88,9 @@ def render_sidebar() -> None:
                         },
                     )
                     st.success(
-                        f"Ingestion terminée !\n\nDocuments : {result['documents_ingested']}\n\nChunks : {result['chunks_created']}"
+                        "Ingestion terminée !\n\n"
+                        f"Documents : {result['documents_ingested']}\n\n"
+                        f"Chunks : {result['chunks_created']}"
                     )
                 except ConnectionError as exc:
                     st.error(str(exc))
@@ -98,11 +105,16 @@ def render_sidebar() -> None:
 def render_query_tab() -> None:
     st.subheader("Interrogez les dossiers patients")
     st.markdown(
-        "Posez votre question médicale en langage naturel. Le système RAG analysera les notes cliniques disponibles et vous fournira une réponse sourcée."
+        "Posez votre question médicale en langage naturel. Le système RAG "
+        "analysera les notes cliniques disponibles et vous fournira une "
+        "réponse sourcée."
     )
     question = st.text_area(
         "Votre question",
-        placeholder="Ex: Quels sont les antécédents cardiovasculaires du patient ? Quelle est la posologie prescrite pour ce diabétique ?",
+        placeholder=(
+            "Ex: Quels sont les antécédents cardiovasculaires du patient ? "
+            "Quelle est la posologie prescrite pour ce diabétique ?"
+        ),
         height=100,
         key="query_input",
     )
@@ -139,7 +151,8 @@ def render_query_tab() -> None:
                 except ConnectionError as exc:
                     st.error(str(exc))
                     st.info(
-                        "Assurez-vous que l'API MedAssist est démarrée avec :\n\n`uvicorn src.api.main:app --reload`"
+                        "Assurez-vous que l'API MedAssist est démarrée "
+                        "avec :\n\n`uvicorn src.api.main:app --reload`"
                     )
                 except Exception as exc:
                     st.error(f"Erreur : {exc}")
@@ -148,7 +161,8 @@ def render_query_tab() -> None:
 def render_metrics_tab() -> None:
     st.subheader("Métriques de qualité RAGAS")
     st.markdown(
-        "Visualisez les scores de qualité du pipeline RAG calculés lors des dernières évaluations MLflow."
+        "Visualisez les scores de qualité du pipeline RAG calculés lors "
+        "des dernières évaluations MLflow."
     )
     if st.button("Charger les métriques", key="load_metrics"):
         try:
@@ -188,20 +202,33 @@ def render_metrics_tab() -> None:
             )
             st.bar_chart(scores_df.set_index("Métrique"))
             st.caption(
-                f"Run MLflow : `{metrics['run_id']}` | Expérience : `{metrics['experiment_name']}`"
+                f"Run MLflow : `{metrics['run_id']}` | "
+                f"Expérience : `{metrics['experiment_name']}`"
             )
         except ConnectionError as exc:
             st.error(str(exc))
         except Exception as exc:
             if "404" in str(exc):
                 st.warning(
-                    "Aucune métrique disponible. Lancez d'abord une évaluation RAGAS via l'API."
+                    "Aucune métrique disponible. Lancez d'abord une "
+                    "évaluation RAGAS via l'API."
                 )
             else:
                 st.error(f"Erreur : {exc}")
     st.markdown("---")
     st.markdown(
-        "### Description des métriques RAGAS\n\n| Métrique | Description | Plage |\n|---|---|---|\n| **Faithfulness** | Mesure si la réponse est supportée par le contexte récupéré. Score = 1 si toutes les affirmations sont vérifiables. | [0, 1] |\n| **Answer Relevancy** | Évalue si la réponse répond réellement à la question posée. Pénalise les réponses incomplètes ou hors-sujet. | [0, 1] |\n| **Context Precision** | Vérifie si les passages récupérés sont pertinents pour répondre à la question. Évalue la qualité du retrieval. | [0, 1] |\n"
+        "### Description des métriques RAGAS\n\n"
+        "| Métrique | Description | Plage |\n"
+        "|---|---|---|\n"
+        "| **Faithfulness** | Mesure si la réponse est supportée par le "
+        "contexte récupéré. Score = 1 si toutes les affirmations sont "
+        "vérifiables. | [0, 1] |\n"
+        "| **Answer Relevancy** | Évalue si la réponse répond réellement à "
+        "la question posée. Pénalise les réponses incomplètes ou "
+        "hors-sujet. | [0, 1] |\n"
+        "| **Context Precision** | Vérifie si les passages récupérés sont "
+        "pertinents pour répondre à la question. Évalue la qualité du "
+        "retrieval. | [0, 1] |\n"
     )
 
 
@@ -214,7 +241,9 @@ def main() -> None:
     )
     st.title("MedAssist — Assistant Médical Intelligent")
     st.markdown(
-        "Système RAG permettant aux cliniciens d'interroger des dossiers patients en langage naturel, basé sur le dataset **Asclepius Synthetic Clinical Notes**."
+        "Système RAG permettant aux cliniciens d'interroger des dossiers "
+        "patients en langage naturel, basé sur le dataset "
+        "**Asclepius Synthetic Clinical Notes**."
     )
     st.markdown("---")
     render_sidebar()

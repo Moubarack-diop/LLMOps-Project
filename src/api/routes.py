@@ -4,7 +4,7 @@ import threading
 from typing import Any, Callable
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 
 from src.api.schemas import (
     HealthResponse,
@@ -23,6 +23,21 @@ from src.retrieval.rag_pipeline import MedicalRAGPipeline
 from src.retrieval.vector_store import QdrantStore
 
 logger = logging.getLogger(__name__)
+
+
+def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    """Protection optionnelle : active si MEDASSIST_API_KEY est définie.
+
+    Sans cette variable l'API reste ouverte (usage local/académique).
+    """
+    expected = os.getenv("MEDASSIST_API_KEY")
+    if expected and x_api_key != expected:
+        raise HTTPException(
+            status_code=401,
+            detail="Clé API invalide ou absente (en-tête 'X-API-Key' requis).",
+        )
+
+
 router = APIRouter()
 
 # Ressources partagées entre les requêtes : le modèle d'embedding met plusieurs
@@ -99,7 +114,8 @@ def warmup_resources() -> None:
             logger.info("Ressource '%s' initialisée au démarrage.", name)
         except Exception as exc:
             logger.warning(
-                "Ressource '%s' indisponible au démarrage (réessai au premier appel) : %s",
+                "Ressource '%s' indisponible au démarrage "
+                "(réessai au premier appel) : %s",
                 name,
                 exc,
             )
@@ -136,8 +152,40 @@ async def health_check() -> HealthResponse:
     )
 
 
-@router.post("/ingest", response_model=IngestResponse, tags=["Ingestion"])
-async def ingest_dataset(request: IngestRequest) -> IngestResponse:
+def _log_ingestion_background(n_docs: int, chunk_size: int) -> None:
+    try:
+        tracker = _get_mlflow_tracker()
+        tracker.log_ingestion(
+            n_docs=n_docs,
+            chunk_size=chunk_size,
+            model_name=os.getenv(
+                "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+            ),
+        )
+    except Exception as mlflow_exc:
+        logger.warning("MLflow logging échoué (non bloquant) : %s", mlflow_exc)
+
+
+def _log_query_background(question: str, answer: str, sources: list[str]) -> None:
+    try:
+        tracker = _get_mlflow_tracker()
+        tracker.log_query(question=question, answer=answer, sources=sources)
+    except Exception as mlflow_exc:
+        logger.warning("MLflow logging échoué (non bloquant) : %s", mlflow_exc)
+
+
+# Les routes ci-dessous sont volontairement synchrones (def) : FastAPI les
+# exécute dans un threadpool, ce qui évite de bloquer l'event loop avec les
+# opérations lourdes (embedding, appels Qdrant/MLflow/Anthropic synchrones).
+@router.post(
+    "/ingest",
+    response_model=IngestResponse,
+    tags=["Ingestion"],
+    dependencies=[Depends(require_api_key)],
+)
+def ingest_dataset(
+    request: IngestRequest, background_tasks: BackgroundTasks
+) -> IngestResponse:
     logger.info(
         "Démarrage de l'ingestion : n_samples=%d, chunk_size=%d",
         request.n_samples,
@@ -155,22 +203,17 @@ async def ingest_dataset(request: IngestRequest) -> IngestResponse:
         store = _get_qdrant_store()
         store.create_collection(vector_size=embedder.get_embedding_dimension())
         n_inserted = store.upsert_documents(chunks=chunks, embeddings=embeddings)
-        try:
-            tracker = _get_mlflow_tracker()
-            tracker.log_ingestion(
-                n_docs=len(documents),
-                chunk_size=request.chunk_size,
-                model_name=os.getenv(
-                    "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
-                ),
-            )
-        except Exception as mlflow_exc:
-            logger.warning("MLflow logging échoué (non bloquant) : %s", mlflow_exc)
+        background_tasks.add_task(
+            _log_ingestion_background, len(documents), request.chunk_size
+        )
         return IngestResponse(
             status="success",
             documents_ingested=len(documents),
             chunks_created=n_inserted,
-            message=f"Ingestion terminée : {len(documents)} documents, {n_inserted} chunks.",
+            message=(
+                f"Ingestion terminée : {len(documents)} documents, "
+                f"{n_inserted} chunks."
+            ),
         )
     except Exception as exc:
         logger.error("Erreur lors de l'ingestion : %s", exc)
@@ -179,8 +222,15 @@ async def ingest_dataset(request: IngestRequest) -> IngestResponse:
         ) from exc
 
 
-@router.post("/query", response_model=QueryResponse, tags=["RAG"])
-async def query_rag(request: QueryRequest) -> QueryResponse:
+@router.post(
+    "/query",
+    response_model=QueryResponse,
+    tags=["RAG"],
+    dependencies=[Depends(require_api_key)],
+)
+def query_rag(
+    request: QueryRequest, background_tasks: BackgroundTasks
+) -> QueryResponse:
     logger.info("Requête RAG reçue : '%s'", request.question[:80])
     try:
         pipeline = _get_rag_pipeline()
@@ -189,15 +239,12 @@ async def query_rag(request: QueryRequest) -> QueryResponse:
             note_id=request.note_id,
             top_k=request.top_k,
         )
-        try:
-            tracker = _get_mlflow_tracker()
-            tracker.log_query(
-                question=request.question,
-                answer=result["answer"],
-                sources=result["source_documents"],
-            )
-        except Exception as mlflow_exc:
-            logger.warning("MLflow logging échoué (non bloquant) : %s", mlflow_exc)
+        background_tasks.add_task(
+            _log_query_background,
+            request.question,
+            result["answer"],
+            result["source_documents"],
+        )
         return QueryResponse(
             answer=result["answer"],
             sources=result["source_documents"],
@@ -210,8 +257,13 @@ async def query_rag(request: QueryRequest) -> QueryResponse:
         ) from exc
 
 
-@router.get("/notes", response_model=NotesResponse, tags=["RAG"])
-async def list_notes() -> NotesResponse:
+@router.get(
+    "/notes",
+    response_model=NotesResponse,
+    tags=["RAG"],
+    dependencies=[Depends(require_api_key)],
+)
+def list_notes() -> NotesResponse:
     try:
         store = _get_qdrant_store()
         notes = store.list_notes()
@@ -223,15 +275,23 @@ async def list_notes() -> NotesResponse:
         ) from exc
 
 
-@router.get("/metrics", response_model=MetricsResponse, tags=["Monitoring"])
-async def get_metrics() -> MetricsResponse:
+@router.get(
+    "/metrics",
+    response_model=MetricsResponse,
+    tags=["Monitoring"],
+    dependencies=[Depends(require_api_key)],
+)
+def get_metrics() -> MetricsResponse:
     try:
         tracker = _get_mlflow_tracker()
         best_run = tracker.get_best_run()
         if not best_run:
             raise HTTPException(
                 status_code=404,
-                detail="Aucune métrique RAGAS disponible. Lancez d'abord une évaluation.",
+                detail=(
+                    "Aucune métrique RAGAS disponible. "
+                    "Lancez d'abord une évaluation."
+                ),
             )
         return MetricsResponse(
             run_id=best_run.get("run_id", ""),

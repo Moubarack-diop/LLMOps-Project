@@ -7,7 +7,25 @@ from src.ingestion.embedder import MedicalEmbedder
 from src.retrieval.vector_store import QdrantStore
 
 logger = logging.getLogger(__name__)
-MEDICAL_SYSTEM_PROMPT = "Tu es MedAssist, un assistant médical intelligent spécialisé dans l'analyse de dossiers patients.\n\nRÈGLES ABSOLUES :\n1. Tu réponds UNIQUEMENT à partir du contexte de notes cliniques fourni ci-dessous.\n2. Si l'information demandée n'est pas présente dans le contexte, tu dois répondre exactement : \"Je ne trouve pas cette information dans les dossiers patients disponibles.\"\n3. Tu ne fais JAMAIS d'hypothèses médicales au-delà du contexte fourni.\n4. Tu cites toujours les identifiants des notes sources utilisées (note_id).\n5. Tu utilises un langage clair, précis et professionnel adapté aux cliniciens.\n\nCONTEXTE DES NOTES CLINIQUES :\n{context}\n\nRéponds maintenant à la question du clinicien en citant les sources pertinentes."
+MEDICAL_SYSTEM_PROMPT = (
+    "Tu es MedAssist, un assistant médical intelligent spécialisé dans "
+    "l'analyse de dossiers patients.\n\n"
+    "RÈGLES ABSOLUES :\n"
+    "1. Tu réponds UNIQUEMENT à partir du contexte de notes cliniques "
+    "fourni ci-dessous.\n"
+    "2. Si l'information demandée n'est pas présente dans le contexte, tu "
+    'dois répondre exactement : "Je ne trouve pas cette information dans '
+    'les dossiers patients disponibles."\n'
+    "3. Tu ne fais JAMAIS d'hypothèses médicales au-delà du contexte "
+    "fourni.\n"
+    "4. Tu cites toujours les identifiants des notes sources utilisées "
+    "(note_id).\n"
+    "5. Tu utilises un langage clair, précis et professionnel adapté aux "
+    "cliniciens.\n\n"
+    "CONTEXTE DES NOTES CLINIQUES :\n{context}\n\n"
+    "Réponds maintenant à la question du clinicien en citant les sources "
+    "pertinentes."
+)
 HUMAN_PROMPT = "Question : {question}"
 
 
@@ -26,7 +44,9 @@ class MedicalRAGPipeline:
         self.llm_model = llm_model
         if not os.getenv("ANTHROPIC_API_KEY"):
             raise RuntimeError(
-                "ANTHROPIC_API_KEY non définie. Renseignez votre clé API Anthropic dans le fichier .env ou les variables d'environnement."
+                "ANTHROPIC_API_KEY non définie. Renseignez votre clé API "
+                "Anthropic dans le fichier .env ou les variables "
+                "d'environnement."
             )
         logger.info("Initialisation du LLM Anthropic (%s)...", llm_model)
         try:

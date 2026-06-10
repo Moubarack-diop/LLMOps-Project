@@ -22,7 +22,8 @@ def load_asclepius_dataset(n_samples: int = 500) -> list[dict[str, Any]]:
     total_available = len(dataset)
     if n_samples > total_available:
         logger.warning(
-            "n_samples (%d) dépasse la taille du dataset (%d). Chargement de tous les exemples disponibles.",
+            "n_samples (%d) dépasse la taille du dataset (%d). "
+            "Chargement de tous les exemples disponibles.",
             n_samples,
             total_available,
         )

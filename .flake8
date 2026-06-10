@@ -10,5 +10,7 @@ exclude =
     dist,
     build
 ignore = E203, W503
+# E501 toléré dans les tests : les fixtures contiennent des notes cliniques
+# d'exemple sur une seule ligne.
 per-file-ignores =
-    tests/*:S101
+    tests/*:S101,E501

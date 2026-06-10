@@ -240,6 +240,46 @@ class TestNotesEndpoint:
         assert data["notes"] == ["note_00000", "note_00391"]
 
 
+class TestApiKeyAuth:
+
+    @patch("src.api.routes.QdrantStore")
+    def test_request_rejected_without_key(self, mock_qdrant_class, test_client):
+        mock_store = MagicMock()
+        mock_store.list_notes.return_value = []
+        mock_qdrant_class.return_value = mock_store
+        with patch.dict("os.environ", {"MEDASSIST_API_KEY": "secret-123"}):
+            response = test_client.get("/notes")
+            assert response.status_code == 401
+
+    @patch("src.api.routes.QdrantStore")
+    def test_request_accepted_with_key(self, mock_qdrant_class, test_client):
+        mock_store = MagicMock()
+        mock_store.list_notes.return_value = ["note_00000"]
+        mock_qdrant_class.return_value = mock_store
+        with patch.dict("os.environ", {"MEDASSIST_API_KEY": "secret-123"}):
+            response = test_client.get("/notes", headers={"X-API-Key": "secret-123"})
+            assert response.status_code == 200
+
+    @patch("src.api.routes.QdrantStore")
+    @patch("httpx.AsyncClient")
+    def test_health_stays_open_without_key(
+        self, mock_httpx_class, mock_qdrant_class, test_client
+    ):
+        mock_store = MagicMock()
+        mock_store.is_healthy.return_value = True
+        mock_qdrant_class.return_value = mock_store
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_async_client = AsyncMock()
+        mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
+        mock_async_client.__aexit__ = AsyncMock(return_value=None)
+        mock_async_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_class.return_value = mock_async_client
+        with patch.dict("os.environ", {"MEDASSIST_API_KEY": "secret-123"}):
+            response = test_client.get("/health")
+            assert response.status_code == 200
+
+
 class TestQueryNoteFilter:
 
     @patch("src.api.routes.MedicalRAGPipeline")

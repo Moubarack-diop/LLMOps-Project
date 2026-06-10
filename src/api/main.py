@@ -55,7 +55,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Anthropic : clé API détectée (modèle '%s')", llm_model)
     else:
         logger.warning(
-            "Anthropic : ANTHROPIC_API_KEY absente. Les requêtes RAG échoueront. Renseignez votre clé dans le fichier .env."
+            "Anthropic : ANTHROPIC_API_KEY absente. Les requêtes RAG "
+            "échoueront. Renseignez votre clé dans le fichier .env."
         )
     # Pré-charge le modèle d'embedding et la connexion Qdrant pour que la
     # première requête ne paie pas le coût d'initialisation (désactivable,
@@ -71,16 +72,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="MedAssist — Assistant Médical Intelligent",
-    description="Système RAG (Retrieval-Augmented Generation) permettant à un clinicien d'interroger des dossiers patients en langage naturel.\n\n**Dataset** : Asclepius Synthetic Clinical Notes (HuggingFace)\n\n**LLM** : Claude via Anthropic (claude-haiku-4-5)\n\n**Embeddings** : sentence-transformers/all-MiniLM-L6-v2\n\n**Base vectorielle** : Qdrant\n\n*Projet académique MLOps — Auteur : Mouhamed Diop | Encadrant : Mously DIAW*",
+    description=(
+        "Système RAG (Retrieval-Augmented Generation) permettant à un "
+        "clinicien d'interroger des dossiers patients en langage naturel."
+        "\n\n**Dataset** : Asclepius Synthetic Clinical Notes (HuggingFace)"
+        "\n\n**LLM** : Claude via Anthropic (claude-haiku-4-5)"
+        "\n\n**Embeddings** : sentence-transformers/all-MiniLM-L6-v2"
+        "\n\n**Base vectorielle** : Qdrant"
+        "\n\n*Projet académique MLOps — Auteur : Mouhamed Diop | "
+        "Encadrant : Mously DIAW*"
+    ),
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+# Origines autorisées, séparées par des virgules (ex: "http://localhost:8501").
+# "*" par défaut pour l'usage local ; à restreindre en déploiement.
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    # Le combo credentials + wildcard est interdit par la spec CORS.
+    allow_credentials="*" not in cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

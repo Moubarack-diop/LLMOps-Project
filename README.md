@@ -128,6 +128,19 @@ CHUNK_OVERLAP=50
 TOP_K=5
 ```
 
+Variables optionnelles :
+
+```env
+# Protège les endpoints (sauf /health) : les clients doivent envoyer la clé
+# dans l'en-tête HTTP X-API-Key. Absente = API ouverte (usage local).
+MEDASSIST_API_KEY=changez-moi
+# Origines CORS autorisées, séparées par des virgules ("*" par défaut).
+CORS_ORIGINS=http://localhost:8501
+# Pré-charge le modèle d'embedding et la connexion Qdrant au démarrage de
+# l'API (activé dans docker-compose) au lieu de la première requête.
+MEDASSIST_EAGER_INIT=1
+```
+
 > ⚠️ Le fichier `.env` contient votre clé secrète : il ne doit **jamais** être commité
 > (il est listé dans `.gitignore`). Ne partagez jamais cette clé.
 

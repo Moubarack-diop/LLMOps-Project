@@ -35,7 +35,8 @@ class RAGASEvaluator:
     def _build_judges(self) -> tuple[Any, Any]:
         if not os.getenv("ANTHROPIC_API_KEY"):
             raise RuntimeError(
-                "ANTHROPIC_API_KEY non définie : impossible d'utiliser Claude comme LLM juge pour RAGAS."
+                "ANTHROPIC_API_KEY non définie : impossible d'utiliser "
+                "Claude comme LLM juge pour RAGAS."
             )
         from langchain_anthropic import ChatAnthropic
         from langchain_huggingface import HuggingFaceEmbeddings
@@ -55,7 +56,10 @@ class RAGASEvaluator:
     ) -> dict[str, float]:
         if not len(questions) == len(answers) == len(contexts) == len(ground_truths):
             raise ValueError(
-                f"Les listes doivent avoir la même longueur. Reçu : questions={len(questions)}, answers={len(answers)}, contexts={len(contexts)}, ground_truths={len(ground_truths)}"
+                "Les listes doivent avoir la même longueur. Reçu : "
+                f"questions={len(questions)}, answers={len(answers)}, "
+                f"contexts={len(contexts)}, "
+                f"ground_truths={len(ground_truths)}"
             )
         if not questions:
             raise ValueError("La liste de questions est vide.")

@@ -96,10 +96,7 @@ def run_embedding_stage(
     embeddings_path = os.path.join(output_dir, "embeddings.npy")
     with open(chunks_path, "w", encoding="utf-8") as f:
         json.dump(
-            [
-                {"page_content": c.page_content, "metadata": c.metadata}
-                for c in chunks
-            ],
+            [{"page_content": c.page_content, "metadata": c.metadata} for c in chunks],
             f,
             ensure_ascii=False,
         )
