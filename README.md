@@ -16,8 +16,8 @@
 └────────────────────────────┬────────────────────────────────────┘
                              │
                     ┌────────▼────────┐
-                    │  Streamlit UI   │  port 8501
-                    │  (Dashboard)    │
+                    │   React UI      │  servie par l'API
+                    │  (frontend/)    │  http://localhost:8000/
                     └────────┬────────┘
                              │ HTTP
                     ┌────────▼────────┐
@@ -54,7 +54,7 @@ Dataset : HuggingFace Asclepius → DVC → Qdrant Vector Store
 | Base vectorielle | Qdrant |
 | Orchestration RAG | LangChain |
 | API | FastAPI |
-| Interface | Streamlit |
+| Interface | React + Vite (TypeScript) |
 | Monitoring qualité | RAGAS |
 | Tracking ML | MLflow |
 | Tests | Pytest |
@@ -135,7 +135,7 @@ Variables optionnelles :
 # dans l'en-tête HTTP X-API-Key. Absente = API ouverte (usage local).
 MEDASSIST_API_KEY=changez-moi
 # Origines CORS autorisées, séparées par des virgules ("*" par défaut).
-CORS_ORIGINS=http://localhost:8501
+CORS_ORIGINS=http://localhost:5173
 # Pré-charge le modèle d'embedding et la connexion Qdrant au démarrage de
 # l'API (activé dans docker-compose) au lieu de la première requête.
 MEDASSIST_EAGER_INIT=1
@@ -160,6 +160,7 @@ docker-compose logs -f api
 ```
 
 Services disponibles :
+- **Interface web** : http://localhost:8000/
 - **API** : http://localhost:8000
 - **Qdrant Dashboard** : http://localhost:6333/dashboard
 - **MLflow UI** : http://localhost:5000
@@ -197,9 +198,12 @@ docker-compose up -d qdrant mlflow
 # Terminal 2 — Démarrer l'API FastAPI
 uvicorn src.api.main:app --reload --port 8000
 
-# Terminal 3 — Démarrer le dashboard Streamlit
-streamlit run src/dashboard/app.py --server.port 8501
+# Terminal 3 (optionnel) — Frontend en mode développement (hot reload)
+cd frontend && npm run dev    # http://localhost:5173
 ```
+
+> Sans le terminal 3, l'interface de production (`frontend/dist`) est servie
+> directement par l'API sur http://localhost:8000/.
 
 ---
 
@@ -214,7 +218,6 @@ curl -X POST http://localhost:8000/ingest \
   -d '{"n_samples": 500, "chunk_size": 512, "chunk_overlap": 50}'
 ```
 
-Via le dashboard : cliquer sur **"Ingérer les données"** dans la sidebar.
 
 ### Étape 2 : Interroger le système
 
@@ -225,7 +228,8 @@ curl -X POST http://localhost:8000/query \
   -d '{"question": "Quels sont les antécédents cardiovasculaires du patient ?", "top_k": 5}'
 ```
 
-Via le dashboard Streamlit : http://localhost:8501
+Via l'interface web : http://localhost:8000/ — sélectionnez un dossier patient
+puis utilisez le panneau **« Interroger ce dossier »**.
 
 ### Étape 3 : Évaluation RAGAS (optionnel)
 
@@ -347,8 +351,8 @@ medassist/
 │   ├── ingestion/          # Chargement, chunking, embedding
 │   ├── retrieval/          # Qdrant + pipeline RAG LangChain
 │   ├── api/                # FastAPI (routes, schemas)
-│   ├── monitoring/         # RAGAS + MLflow
-│   └── dashboard/          # Streamlit UI
+│   └── monitoring/         # RAGAS + MLflow
+├── frontend/               # Interface web React + Vite
 ├── tests/                  # Tests unitaires pytest
 ├── notebooks/              # Exploration du dataset
 ├── .github/workflows/      # CI/CD GitHub Actions

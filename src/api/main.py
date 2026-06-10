@@ -103,7 +103,7 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
-# Origines autorisées, séparées par des virgules (ex: "http://localhost:8501").
+# Origines autorisées, séparées par des virgules (ex: "http://localhost:5173").
 # "*" par défaut pour l'usage local ; à restreindre en déploiement.
 cors_origins = [
     origin.strip()

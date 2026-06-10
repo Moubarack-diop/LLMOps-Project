@@ -19,7 +19,6 @@ setup(
         "qdrant-client>=1.9.0",
         "fastapi>=0.111.0",
         "uvicorn[standard]>=0.29.0",
-        "streamlit>=1.35.0",
         "ragas>=0.1.9",
         "mlflow>=2.13.0",
         "datasets>=2.19.0",
