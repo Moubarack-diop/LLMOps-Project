@@ -33,3 +33,6 @@ mlartifacts/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Captures d'ecran locales
+*.png
