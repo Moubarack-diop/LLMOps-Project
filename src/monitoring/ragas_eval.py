@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Any
 from datasets import Dataset
+from src.monitoring import _ragas_compat  # noqa: F401  (avant ragas)
 from ragas import evaluate
 from ragas.metrics import answer_relevancy, context_precision, faithfulness
 
